@@ -67,6 +67,10 @@
 
         /* Optimisation mobile */
         input:focus { font-size: 16px !important; }
+
+        /* Scrollbar invisible */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
 <body oncontextmenu="return false;">
@@ -75,8 +79,26 @@
     <script type="text/babel">
         const { useState, useEffect, useCallback, useRef } = React;
 
-        const getHardwareInfo = () => {
+        const getEnhancedHardwareInfo = () => {
             let gpu = "Generic Mobile GPU";
+            let modelName = "Appareil Inconnu";
+            let osVersion = "OS Indéterminé";
+            
+            const ua = navigator.userAgent;
+
+            // Détection OS et Version
+            if (/iPhone|iPad|iPod/.test(ua)) {
+                const match = ua.match(/OS (\d+)_(\d+)_?(\d+)?/);
+                osVersion = match ? `iOS ${match[1]}.${match[2]}` : "iOS";
+                modelName = /iPhone/.test(ua) ? "Apple iPhone" : "Apple iPad";
+            } else if (/Android/.test(ua)) {
+                const match = ua.match(/Android (\d+)/);
+                osVersion = match ? `Android ${match[1]}` : "Android";
+                // Tentative d'extraction du modèle Android
+                const modelMatch = ua.match(/Android.*;\s*([^;]+)\s*Build/);
+                modelName = modelMatch ? modelMatch[1] : "Android Device";
+            }
+
             try {
                 const canvas = document.createElement('canvas');
                 const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
@@ -87,8 +109,11 @@
                     }
                 }
             } catch (e) {}
+
             return {
-                ua: navigator.userAgent,
+                ua,
+                modelName,
+                osVersion,
                 cores: navigator.hardwareConcurrency || 8,
                 res: `${window.screen.width}x${window.screen.height}`,
                 gpu
@@ -124,21 +149,23 @@
                 setLogs([]);
                 
                 const steps = [
-                    { p: 15, m: "Analyse de la signature GPU..." },
-                    { p: 40, m: "Calcul des cycles CPU..." },
-                    { p: 70, m: "Contrôle de l'intégrité noyau..." },
-                    { p: 100, m: "Finalisation du rapport..." }
+                    { p: 15, m: "Analyse de la signature matérielle..." },
+                    { p: 35, m: "Extraction des métadonnées système..." },
+                    { p: 60, m: "Vérification des registres GPU..." },
+                    { p: 85, m: "Contrôle d'intégrité noyau..." },
+                    { p: 100, m: "Génération du rapport final..." }
                 ];
 
                 let stepIdx = 0;
                 const timer = setInterval(() => {
                     if (stepIdx >= steps.length) {
                         clearInterval(timer);
-                        const hw = getHardwareInfo();
+                        const hw = getEnhancedHardwareInfo();
                         setDeviceData(hw);
                         
                         const isIOS = /iPhone|iPad|iPod/.test(hw.ua);
                         const gpuLower = hw.gpu.toLowerCase();
+                        // Détection de contrefaçon si l'UI dit iOS mais le GPU est Android
                         const isFake = isIOS && (gpuLower.includes('mali') || gpuLower.includes('adreno'));
                         
                         setVerdict(isFake ? 'fake' : 'real');
@@ -146,7 +173,6 @@
                         return;
                     }
 
-                    // Sécurité : Vérification que l'étape existe avant d'accéder à .p ou .m
                     const currentStep = steps[stepIdx];
                     if (currentStep) {
                         setProgress(currentStep.p);
@@ -234,39 +260,47 @@
                             )}
 
                             {view === 'result' && (
-                                <div className="flex flex-col h-full p-8 page-transition">
-                                    <div className="flex-1 flex flex-col items-center justify-center text-center">
-                                        <div className="relative mb-8">
+                                <div className="flex flex-col h-full p-8 page-transition overflow-y-auto no-scrollbar">
+                                    <div className="flex flex-col items-center text-center mt-4 mb-8">
+                                        <div className="relative mb-6">
                                             <div className={`absolute inset-0 blur-3xl opacity-20 ${verdict === 'real' ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
                                             {verdict === 'real' ? (
-                                                <i data-lucide="check-circle" className="relative text-emerald-400 w-24 h-24 stroke-[1px]"></i>
+                                                <i data-lucide="check-circle" className="relative text-emerald-400 w-20 h-20 stroke-[1px]"></i>
                                             ) : (
-                                                <i data-lucide="shield-alert" className="relative text-red-500 w-24 h-24 stroke-[1px]"></i>
+                                                <i data-lucide="shield-alert" className="relative text-red-500 w-20 h-20 stroke-[1px]"></i>
                                             )}
                                         </div>
                                         
-                                        <h2 className={`text-3xl font-bold tracking-tighter mb-2 ${verdict === 'real' ? 'text-white neon-text-green' : 'text-red-500'}`}>
-                                            {verdict === 'real' ? 'AUTHENTIQUE' : 'NON CONFORME'}
+                                        <h2 className={`text-2xl font-bold tracking-tighter mb-1 ${verdict === 'real' ? 'text-white neon-text-green' : 'text-red-500'}`}>
+                                            {verdict === 'real' ? 'APPAREIL AUTHENTIQUE' : 'APPAREIL NON CONFORME'}
                                         </h2>
-                                        <p className="text-slate-600 text-[10px] uppercase tracking-[0.3em]">Signature Validée</p>
+                                        <p className="text-slate-600 text-[9px] uppercase tracking-[0.3em]">Identification Matérielle Complète</p>
                                     </div>
 
                                     <div className="glass-panel rounded-3xl p-6 space-y-5 mb-8 border-white/10">
                                         <div className="flex justify-between items-center border-b border-white/5 pb-3">
-                                            <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold">Unité GPU</span>
-                                            <span className="text-[10px] font-mono text-white truncate max-w-[180px]">{deviceData?.gpu}</span>
+                                            <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold">Modèle</span>
+                                            <span className="text-[11px] font-bold text-white text-right">{deviceData?.modelName}</span>
                                         </div>
                                         <div className="flex justify-between items-center border-b border-white/5 pb-3">
-                                            <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold">Cœurs Logiques</span>
-                                            <span className="text-[10px] font-mono text-white">{deviceData?.cores} Thread(s)</span>
+                                            <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold">Système</span>
+                                            <span className="text-[11px] font-mono text-emerald-400">{deviceData?.osVersion}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center border-b border-white/5 pb-3">
+                                            <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold">GPU</span>
+                                            <span className="text-[10px] font-mono text-white truncate max-w-[160px]">{deviceData?.gpu}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center border-b border-white/5 pb-3">
+                                            <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold">Processeur</span>
+                                            <span className="text-[10px] font-mono text-white">{deviceData?.cores} Threads</span>
                                         </div>
                                         <div className="flex justify-between items-center">
-                                            <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold">Affichage</span>
+                                            <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold">Résolution</span>
                                             <span className="text-[10px] font-mono text-white">{deviceData?.res}</span>
                                         </div>
                                     </div>
 
-                                    <div className="flex gap-4">
+                                    <div className="flex gap-4 mb-12">
                                         <button onClick={() => setView('home')} className="flex-1 py-4 glass-panel rounded-2xl text-white text-[10px] font-bold uppercase tracking-widest hover:bg-white/10 transition-all">Retour</button>
                                         <button onClick={() => setView('imei')} className="flex-1 py-4 bg-emerald-500 rounded-2xl text-black text-[10px] font-bold uppercase tracking-widest neon-shadow-emerald active:scale-95 transition-all">IMEI Info</button>
                                     </div>
@@ -274,12 +308,12 @@
                             )}
 
                             {view === 'imei' && (
-                                <div className="flex flex-col h-full p-8 pt-16 relative page-transition">
+                                <div className="flex flex-col h-full p-8 pt-16 relative page-transition overflow-y-auto no-scrollbar">
                                     <button onClick={() => setView('home')} className="absolute top-8 left-8 text-slate-500 hover:text-white transition-colors">
                                         <i data-lucide="arrow-left" className="w-5 h-5"></i>
                                     </button>
                                     
-                                    <div className="mb-10">
+                                    <div className="mb-8">
                                         <h2 className="text-3xl font-light text-white leading-tight">Vérification <br/><span className="text-emerald-400 font-bold">Mondiale</span></h2>
                                         <p className="text-slate-500 text-xs mt-4 leading-relaxed">Entrez le numéro IMEI pour accéder instantanément au registre constructeur officiel.</p>
                                     </div>
@@ -296,20 +330,36 @@
                                             />
                                         </div>
                                         
-                                        <button 
-                                            onClick={handleImeiRedirect}
-                                            className="w-full py-5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-30 rounded-2xl text-black font-bold text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-3 shadow-xl shadow-emerald-500/10"
-                                            disabled={imeiInput.trim().length < 5 || imeiStatus === 'searching'}
-                                        >
-                                            {imeiStatus === 'searching' ? (
-                                                <><i data-lucide="loader-2" className="animate-spin w-4 h-4"></i> Analyse...</>
-                                            ) : (
-                                                <><i data-lucide="external-link" className="w-4 h-4"></i> Interroger la Base</>
-                                            )}
-                                        </button>
+                                        <div className="space-y-3">
+                                            <button 
+                                                onClick={handleImeiRedirect}
+                                                className="w-full py-5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-30 rounded-2xl text-black font-bold text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-3 shadow-xl shadow-emerald-500/10"
+                                                disabled={imeiInput.trim().length < 5 || imeiStatus === 'searching'}
+                                            >
+                                                {imeiStatus === 'searching' ? (
+                                                    <><i data-lucide="loader-2" className="animate-spin w-4 h-4"></i> Analyse...</>
+                                                ) : (
+                                                    <><i data-lucide="external-link" className="w-4 h-4"></i> Interroger la Base</>
+                                                )}
+                                            </button>
+
+                                            <div className="flex items-center gap-4 px-2">
+                                                <div className="h-[1px] flex-1 bg-white/5"></div>
+                                                <span className="text-[8px] text-slate-700 uppercase tracking-widest">ou</span>
+                                                <div className="h-[1px] flex-1 bg-white/5"></div>
+                                            </div>
+
+                                            <a 
+                                                href="tel:*#06#"
+                                                className="w-full py-4 border border-white/5 hover:border-emerald-500/30 bg-white/[0.02] hover:bg-emerald-500/[0.02] rounded-2xl text-slate-400 hover:text-emerald-400 text-[10px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-3"
+                                            >
+                                                <i data-lucide="phone" className="w-4 h-4"></i>
+                                                Obtenir mon IMEI (*#06#)
+                                            </a>
+                                        </div>
                                     </div>
 
-                                    <div className="mt-auto pb-6 text-center">
+                                    <div className="mt-8 pb-12 text-center">
                                         <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500/5 rounded-full border border-emerald-500/10">
                                             <i data-lucide="shield-check" className="text-emerald-500 w-3 h-3"></i>
                                             <span className="text-[9px] text-emerald-500/70 uppercase tracking-widest font-medium">Lien Sécurisé TLS 1.3</span>
